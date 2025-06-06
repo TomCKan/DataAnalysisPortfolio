@@ -1,0 +1,228 @@
+<!DOCTYPE HTML>
+<!--
+	Massively by HTML5 UP
+	html5up.net | @ajlkn
+	Free for personal and commercial use under the CCA 3.0 license (html5up.net/license)
+-->
+<html>
+	<head>
+		<title>Project - Tom Kanchanatheera Portfolio</title>
+		<meta charset="utf-8" />
+		<meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=no" />
+		<link rel="stylesheet" href="assets/css/main.css" />
+		<noscript><link rel="stylesheet" href="assets/css/noscript.css" /></noscript>
+	</head>
+	<body class="is-preload">
+
+		<!-- Wrapper -->
+			<div id="wrapper">
+
+				<!-- Header -->
+					<header id="header">
+						<a href="index.html" class="logo">Portfolio Homepage</a>
+					</header>
+
+				<!-- Nav -->
+					<nav id="nav">
+						<ul class="links">
+							<li class="active"><a href="index.html">Portfolio</a></li>
+							<li><a href="about.html">About Me</a></li>
+							<li><a href="reviews.html">Past Clients & Reviews</a></li>
+						</ul>
+						<ul class="icons">
+							<li><a href="https://www.linkedin.com/in/tom-kanchanatheera-3374b4140/" class="icon brands alt fa-linkedin"><span class="label">LinkedIn</span></a></li>
+							<li><a href="https://github.com/TomCKan" class="icon brands alt fa-github"><span class="label">GitHub</span></a></li>
+						</ul>
+					</nav>
+
+				<!-- Main -->
+					<div id="main">
+
+						<!-- Post -->
+							<section class="post">
+								<header class="major">
+									<span class="date">2025</span>
+									<h1>Anomaly Detection for Quality Assurance in Footfall Data<br />
+									- Historic England</h1>
+									<p>As part of Historic England's goal to increase data accuracy,<br />
+									I have experimented with the creation of a scoring system to assess<br />
+									the quality of footfall datasets using anomaly detection techniques.</p>
+								</header>
+								<div class="image main"><img src="images/Thiago_Matos_crowd-shadow-image.jpeg" alt="" /></div>
+								<p>
+									Footfall data from mobile GPS is increasingly used to understand how people engage with places. Ensuring this data is accurate is critical for Historic England making informed policy and investment decisions.
+								</p>
+								<p>
+									The initial goal of the project was to create a straightforward scoring system to assess the quality of footfall datasets using anomaly detection techniques. The basic assumption was that a higher number of anomalies would suggest lower data reliability, thereby offering a practical metric for evaluating data quality.
+								</p>
+								<p>
+									This report outlines the logic and methodology we used, details the statistical techniques applied, discusses issues encountered, and identifies areas for future improvement.
+								</p>
+
+								<h2>Methodology Summary</h2>
+
+								<h3>Time Series Decomposition</h3>
+								<p>
+									Our anomaly detection pipeline began with STL decomposition (Seasonal-Trend decomposition using Loess), which separates a time-series into three components:
+								</p>
+								<ul>
+									<li><strong>Trend:</strong> the long-term movement in the data.</li>
+									<li><strong>Seasonality:</strong> regular, cyclic fluctuations (e.g., weekly or yearly patterns). We established a weekly seasonality component based on our knowledge of footfall behaviour, which aligned well with known work-week patterns.</li>
+									<li><strong>Residuals:</strong> the remaining component after removing trend and seasonality, ideally consisting of random noise.</li>
+								</ul>
+								<p>
+									This decomposition was crucial given our data’s known weekly cycles and declining trend. By isolating the residuals, we aimed to focus our anomaly detection on the unpredictable variations in the data.
+								</p>
+
+								<h3>Anomaly Detection Techniques</h3>
+								<p>We applied two different anomaly detection methods to the residuals:</p>
+								<ol>
+									<li><strong>Z-score Method:</strong>
+									<ul>
+										<li>Standardizes the residuals and flags values that deviate from the mean by a certain threshold (e.g., &gt;3 standard deviations).</li>
+										<li>Assumes a normal distribution, which may not always hold.</li>
+									</ul>
+									</li>
+									<li><strong>Isolation Forests:</strong>
+									<ul>
+										<li>A tree-based model that isolates outliers through recursive partitioning.</li>
+										<li>Efficient in high-dimensional data but potentially suboptimal for univariate time series (like our residuals).</li>
+									</ul>
+									</li>
+								</ol>
+								<p>
+									We chose Z-scores and Isolation Forest as our starting methods because of their accessibility and complementary strengths, and they are widely used within other industries for anomaly detection.
+								</p>
+								<p>
+									Z-scores are great for spotting values that are far from the average; or what’s considered normal. They’re quick to calculate and help us set a clear threshold for what counts as “unusual.”
+								</p>
+								<p>
+									Isolation Forest is a bit more advanced — it doesn’t need to know what “normal” looks like before processing. It finds unusual points by splitting up the data and seeing which points are easiest to separate from the rest.
+								</p>
+								<p>
+									Using both gave us a simple, reliable way to test for anomalies early on, even without having labelled data to compare against.
+								</p>
+
+								<h2>Testing and Evaluation</h2>
+
+								<h3>Synthetic Anomalies</h3>
+								<p>
+									To evaluate model accuracy, we introduced synthetic anomalies (artificial extreme high or low footfall values) at known timestamps. This served as a controlled test for detection accuracy.
+								</p>
+
+								<h3>Key Findings</h3>
+								<ul>
+									<li>Z-scores were less effective at finding anomalies because of the lack of a normal distribution in the data.</li>
+									<li>Isolation Forest was effective at detecting synthetic anomalies after fine-tuning. (Looking at a Leeds high street as an example, it initially found 62.5% of the synthetic anomalies, marking 20% of the total dataset as an anomaly. The contamination of Isolation Forest <em>(a parameter that controls how many anomalies the model is expected to find)</em> could be increased to increase the total number of anomalies in order to find 100% of the synthetic anomalies).</li>
+									<li>However, it also flagged a high number of anomalies in the real data, which we do not believe to be accurate based on prior visual checks and quality assurance.</li>
+								</ul>
+								<p>
+									Because we lacked independently validated anomalies, our evaluation of model performance relied on synthetic anomalies. This created a validation loop, where the success of the model was judged based on fabricated data rather than an external ground truth, and doesn’t take into account the quality of the real data where the accuracy of anomalies is still unknown.
+								</p>
+								<p>
+									In other words, this created a circular validation issue: we used the model to test the data’s quality, and the same data to test the model's accuracy.
+								</p>
+								<p>
+									This situation is common with financial datasets used in events like fraud detection, however this differs from our situation, as there is an abundance of continuous financial data that can be tested upon and gradually improved over time, as well as known fraud patterns that can be identified. With our footfall data, we only had information from a set period, and no continuous new data to improve models gradually.
+								</p>
+
+								<h2>Interpretation and Limitations</h2>
+								<p>While the initial concept of anomaly-based quality scoring was promising, several issues emerged:</p>
+								<ol>
+									<li><strong>Over-Detection Problem:</strong>
+									<ul>
+										<li>The model may be over-sensitive, flagging normal but volatile footfall patterns as anomalies.</li>
+										<li>High anomaly rates may reflect natural volatility rather than poor data quality.</li>
+									</ul>
+									</li>
+									<li><strong>Model Appropriateness:</strong>
+									<ul>
+										<li>Isolation Forest is generally used in multi-dimensional contexts. Applying it to univariate, decomposed time series may not leverage its strengths.</li>
+									</ul>
+									</li>
+									<li><strong>Validation Loop:</strong>
+									<ul>
+										<li>Lacking real-world labelled anomalies, our artificial anomaly method resulted in self-reinforcing conclusions.</li>
+									</ul>
+									</li>
+									<li><strong>Assumption of Normality:</strong>
+									<ul>
+										<li>Z-scores assume normally distributed residuals, which may not hold post-decomposition.</li>
+									</ul>
+									</li>
+								</ol>
+
+								<h2>Future Directions and Refinement Plans</h2>
+								<p>We have identified areas to revisit and test in the next iteration:</p>
+								<ol>
+									<li><strong>Use of ESD Test with STL Decomposition:</strong>
+									<ul>
+										<li>Replicating Twitter's Anomaly Detection logic by applying the Extreme Studentized Deviate (ESD) test to STL residuals. This would provide a statistically grounded method tailored to univariate seasonal data.</li>
+									</ul>
+									</li>
+									<li><strong>Move Towards Time-Series-Specific Models:</strong>
+									<ul>
+										<li>In future, explore models like LSTM or autoencoders that are designed for sequential, time-dependent data.</li>
+									</ul>
+									</li>
+									<li><strong>Refined Metric of Data Quality:</strong>
+									<ul>
+										<li>Instead of pure anomaly count, consider metrics like anomaly density by week, deviation size, or anomaly persistence.</li>
+									</ul>
+									</li>
+								</ol>
+
+								<h2>Conclusion</h2>
+								<p>
+									The idea of using anomaly detection to assess footfall dataset quality holds value but requires more tailored methods and validation. Future work will refine our models and metrics based on the lessons learned from this pilot phase, incorporating more time-series-specific approaches and robust statistical testing frameworks.
+  								</p>
+							</section>
+
+					</div>
+
+				<!-- Footer -->
+					<footer id="footer">
+						<section>
+							<p>Bringing expertise in data collection & analysis, KPI monitoring, and process automation to your next project. Open to opportunities and collaborations.</p>
+						</section>
+						<section class="split contact">
+							<section class="alt">
+								<h3>Location</h3>
+								<p>London (UK), Bristol (UK) or Remote</p>
+							</section>
+							<section>
+								<h3>Phone</h3>
+								<p>07599128852</p>
+							</section>
+							<section>
+								<h3>Email</h3>
+								<p>tomkan02@gmail.com</p>
+							</section>
+							<section>
+								<h3>Social</h3>
+								<ul class="icons alt">
+									<li><a href="https://www.linkedin.com/in/tom-kanchanatheera-3374b4140/" class="icon brands alt fa-linkedin"><span class="label">LinkedIn</span></a></li>
+									<li><a href="https://github.com/TomCKan" class="icon brands alt fa-github"><span class="label">GitHub</span></a></li>
+								</ul>
+							</section>
+						</section>
+					</footer>
+
+				<!-- Copyright -->
+					<div id="copyright">
+						<ul><li>&copy; Massively</li><li>Design: <a href="https://html5up.net/massively">HTML5 UP</a></li></ul>
+					</div>
+
+			</div>
+
+		<!-- Scripts -->
+			<script src="assets/js/jquery.min.js"></script>
+			<script src="assets/js/jquery.scrollex.min.js"></script>
+			<script src="assets/js/jquery.scrolly.min.js"></script>
+			<script src="assets/js/browser.min.js"></script>
+			<script src="assets/js/breakpoints.min.js"></script>
+			<script src="assets/js/util.js"></script>
+			<script src="assets/js/main.js"></script>
+
+	</body>
+</html>
