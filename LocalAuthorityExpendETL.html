@@ -1,0 +1,286 @@
+<!DOCTYPE HTML>
+<!--
+	Massively by HTML5 UP
+	html5up.net | @ajlkn
+	Free for personal and commercial use under the CCA 3.0 license (html5up.net/license)
+-->
+<html>
+	<head>
+		<title>Project - Tom Kanchanatheera Portfolio</title>
+		<meta charset="utf-8" />
+		<meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=no" />
+		<link rel="stylesheet" href="assets/css/main.css" />
+		<noscript><link rel="stylesheet" href="assets/css/noscript.css" /></noscript>
+	</head>
+	<body class="is-preload">
+
+		<!-- Wrapper -->
+			<div id="wrapper">
+
+				<!-- Header -->
+					<header id="header">
+						<a href="index.html" class="logo">Portfolio Homepage</a>
+					</header>
+
+				<!-- Nav -->
+					<nav id="nav">
+						<ul class="links">
+							<li class="active"><a href="index.html">Portfolio</a></li>
+							<li><a href="about.html">About Me</a></li>
+							<li><a href="reviews.html">Past Clients & Reviews</a></li>
+						</ul>
+						<ul class="icons">
+							<li><a href="https://www.linkedin.com/in/tom-kanchanatheera-3374b4140/" class="icon brands alt fa-linkedin"><span class="label">LinkedIn</span></a></li>
+							<li><a href="https://github.com/TomCKan" class="icon brands alt fa-github"><span class="label">GitHub</span></a></li>
+						</ul>
+					</nav>
+
+				<!-- Main -->
+					<div id="main">
+
+						<!-- Post -->
+							<section class="post">
+								<header class="major">
+									<span class="date">2025</span>
+									<h1>Building a Clean and Efficient ETL Pipeline<br />with Python and PostgreSQL</h1>
+									<p>
+									This project demonstrates the design and implementation of a full ETL pipeline using Python and SQL to process UK local authority expenditure data.
+									</p>
+								</header>
+								<div class="image main"><img src="images/sid-verma-6usLW9odNjY-unsplash.jpg" alt="" /></div>
+
+								<p>
+									The goal is to clean and normalize raw CSV data, ensure referential integrity through carefully structured relational tables, and efficiently load transformed data into a PostgreSQL database using staging tables. The result is a maintainable and scalable workflow suitable for ongoing data ingestion.
+								</p>
+
+								<h2>Process Summary</h2>
+								<table>
+									<thead>
+									<tr>
+										<th>Step</th>
+										<th>Task</th>
+										<th>Tool</th>
+										<th>Description</th>
+									</tr>
+									</thead>
+									<tbody>
+									<tr>
+										<td>1</td>
+										<td>Initial schema setup</td>
+										<td>SQL</td>
+										<td>Create tables with primary/foreign keys and constraints.</td>
+									</tr>
+									<tr>
+										<td>2</td>
+										<td>Data cleaning & transformation</td>
+										<td>Python (Pandas)</td>
+										<td>Normalize data using melt, deduplication, hashing.</td>
+									</tr>
+									<tr>
+										<td>3</td>
+										<td>Staging table loading</td>
+										<td>Python + SQL (COPY)</td>
+										<td>Load data to temporary staging tables for safe validation.</td>
+									</tr>
+									<tr>
+										<td>4</td>
+										<td>Upsert into main tables</td>
+										<td>SQL</td>
+										<td>Use <code>INSERT ... ON CONFLICT DO UPDATE</code> to merge new data.</td>
+									</tr>
+									<tr>
+										<td>5</td>
+										<td>Materialized views refresh</td>
+										<td>SQL</td>
+										<td>Recompute derived views post-ingestion.</td>
+									</tr>
+									</tbody>
+								</table>
+
+								<h2>Relational Schema Design</h2>
+								<ul>
+									<li><strong>local_authority_meta:</strong> Metadata about each authority. Primary Key: <code>ons_code</code>.</li>
+									<li><strong>expenditure:</strong> Normalized expenditure data. Primary Key: <code>exp_id</code> (hash of <code>ons_code</code>, <code>year_ending</code>, <code>status</code>, <code>metric_name</code>).</li>
+									<li><strong>metric_meta:</strong> Metric definitions and descriptions. Primary Key: <code>metric_name</code>.</li>
+								</ul>
+
+								<p>
+									Foreign key constraints enforce data integrity:
+									<br />
+									<code>expenditure.ons_code → local_authority_meta.ons_code</code><br />
+									<code>expenditure.metric_name → metric_meta.metric_name</code><br />
+									<em>ON DELETE CASCADE</em> ensures dependent expenditure rows are removed if their parent meta is deleted.
+								</p>
+
+								<h2>Transformation Logic in Python</h2>
+								<p>
+									The data is loaded into pandas and transformed through several steps:
+								</p>
+								<ul>
+									<li><strong>Sorting:</strong> Keep the most recent <code>year_ending</code> entry per authority.</li>
+									<li><strong>Deduplication:</strong> Drop duplicate metadata based on <code>ons_code</code>.</li>
+									<li><strong>Melting:</strong> Reshape wide-form data into long-form for each <code>metric_name</code>.</li>
+									<li><strong>Hashing:</strong> Create deterministic <code>exp_id</code> values.</li>
+								</ul>
+
+								<pre><code>def generate_md5_hash(*args):
+	combined = "||".join(str(arg) for arg in args)
+	return hashlib.md5(combined.encode()).hexdigest()
+</code></pre>
+
+								<pre><code>df_expenditure = pd.melt(
+	df_data,
+	id_vars=['ONS_code', 'year_ending', 'status'],
+	var_name='metric_name',
+	value_name='metric_value'
+)
+</code></pre>
+
+								<p>
+									The expenditure table is now in long-form, with one row per metric per authority per year. This improves querying and aligns with normalized database design principles.
+								</p>
+
+								<h2>Staging Table Load</h2>
+								<p>
+									To avoid corrupting the main database, data is first written to staging tables. These are truncated before every run to ensure no duplicates.
+								</p>
+								<p>
+									Using <code>psycopg2</code> and <code>COPY</code>, the process loads pandas DataFrames into PostgreSQL quickly via memory buffers:
+								</p>
+
+								<pre><code>def copy_to_postgres(df, table_name, conn):
+	buffer = io.StringIO()
+	df.to_csv(buffer, index=False, header=False)
+	buffer.seek(0)
+	cursor.copy_expert(f"COPY {table_name} FROM STDIN WITH CSV", buffer)
+</code></pre>
+
+								<h3>Why Use Staging Tables?</h3>
+								<ul>
+									<li>Ensures clean insertions with validated data.</li>
+									<li>Supports repeatable, idempotent ETL jobs.</li>
+									<li>Enables atomic operations and rollback on failure.</li>
+								</ul>
+
+								<h2>Upsert from Staging to Actual Tables</h2>
+								<p>
+									Once the staging tables are loaded and validated, a SQL script runs to insert new records and update existing ones:
+								</p>
+
+								<pre><code>BEGIN;
+
+INSERT INTO la_expenditure_local_authority_meta (ons_code, la_lgf_code, la_name, la_class, la_subclass)
+SELECT ons_code, la_lgf_code, la_name, la_class, la_subclass
+FROM la_expenditure_staging_local_authority_meta
+ON CONFLICT (ons_code)
+DO UPDATE SET
+    la_lgf_code = EXCLUDED.la_lgf_code,
+    la_name     = EXCLUDED.la_name,
+    la_class    = EXCLUDED.la_class,
+    la_subclass = EXCLUDED.la_subclass;
+
+INSERT INTO la_expenditure_metric_meta (metric_name, form_name, description)
+SELECT metric_name, form_name, description
+FROM la_expenditure_staging_metric_meta
+ON CONFLICT (metric_name)
+DO UPDATE SET
+    form_name   = EXCLUDED.form_name,
+    description = EXCLUDED.description;
+
+INSERT INTO la_expenditure (exp_id, ons_code, year_ending, status, metric_name, metric_value)
+SELECT exp_id, ons_code, year_ending, status, metric_name, metric_value
+FROM la_expenditure_staging
+ON CONFLICT (exp_id)
+DO UPDATE SET
+    ons_code      = EXCLUDED.ons_code,
+    year_ending   = EXCLUDED.year_ending,
+    status        = EXCLUDED.status,
+    metric_name   = EXCLUDED.metric_name,
+    metric_value  = EXCLUDED.metric_value;
+
+COMMIT;
+</code></pre>
+
+								<p>
+									After a successful upsert, staging tables are truncated again. This ensures they remain temporary and disposable.
+								</p>
+
+								<h2>Refreshing Materialized Views</h2>
+								<p>
+									After all data has been loaded and upserted, any dependent materialized views are refreshed to reflect the latest state.
+								</p>
+
+								<pre><code>REFRESH MATERIALIZED VIEW CONCURRENTLY la_expenditure_summary;</code></pre>
+
+								<h2>Key Lessons & Best Practices</h2>
+								<ul>
+									<li><strong>Data Integrity:</strong> Hash-based primary keys and foreign keys enforce strong data relationships.</li>
+									<li><strong>Normalization:</strong> Melting data avoids duplicated columns and enables scalable querying.</li>
+									<li><strong>Performance:</strong> Bulk-loading with COPY is fast and minimizes DB strain.</li>
+									<li><strong>Idempotency:</strong> Upserts ensure re-runs won’t duplicate data.</li>
+									<li><strong>Maintainability:</strong> Using staging tables isolates each ETL phase for easy debugging.</li>
+								</ul>
+
+								<h2>Next Steps</h2>
+								<ul>
+									<li>Implement logging and alerts for pipeline failures.</li>
+									<li>Automate the workflow using Airflow or cron jobs.</li>
+									<li>Add schema migration/versioning tools like Alembic.</li>
+									<li>Expose data to BI tools for dashboarding and monitoring.</li>
+								</ul>
+
+								<h2>Conclusion</h2>
+								<p>
+									This ETL pipeline transforms raw CSV data into a reliable, normalized, and relational PostgreSQL database structure. It combines Python’s data wrangling capabilities with SQL’s relational integrity to create a robust data ingestion pipeline suitable for production environments. Future enhancements will focus on automation, observability, and long-term maintainability.
+								</p>
+							</section>
+
+
+					</div>
+
+				<!-- Footer -->
+					<footer id="footer">
+						<section>
+							<p>Bringing expertise in data collection & analysis, KPI monitoring, and process automation to your next project. Open to opportunities and collaborations.</p>
+						</section>
+						<section class="split contact">
+							<section class="alt">
+								<h3>Location</h3>
+								<p>London (UK), Bristol (UK) or Remote</p>
+							</section>
+							<section>
+								<h3>Phone</h3>
+								<p>07599128852</p>
+							</section>
+							<section>
+								<h3>Email</h3>
+								<p>tomkan02@gmail.com</p>
+							</section>
+							<section>
+								<h3>Social</h3>
+								<ul class="icons alt">
+									<li><a href="https://www.linkedin.com/in/tom-kanchanatheera-3374b4140/" class="icon brands alt fa-linkedin"><span class="label">LinkedIn</span></a></li>
+									<li><a href="https://github.com/TomCKan" class="icon brands alt fa-github"><span class="label">GitHub</span></a></li>
+								</ul>
+							</section>
+						</section>
+					</footer>
+
+				<!-- Copyright -->
+					<div id="copyright">
+						<ul><li>&copy; Massively</li><li>Design: <a href="https://html5up.net/massively">HTML5 UP</a></li></ul>
+					</div>
+
+			</div>
+
+		<!-- Scripts -->
+			<script src="assets/js/jquery.min.js"></script>
+			<script src="assets/js/jquery.scrollex.min.js"></script>
+			<script src="assets/js/jquery.scrolly.min.js"></script>
+			<script src="assets/js/browser.min.js"></script>
+			<script src="assets/js/breakpoints.min.js"></script>
+			<script src="assets/js/util.js"></script>
+			<script src="assets/js/main.js"></script>
+
+	</body>
+</html>
